@@ -9,6 +9,8 @@ that filter insists on.
 It is not a Photoshop replacement. It replaces the *tedious part* of making the
 texture.
 
+![GlassForge generating a reeded-glass height map](docs/screenshot.png)
+
 ## Why
 
 The Glass filter reads a PSD's **luminance as a height map** and pushes pixels
@@ -29,6 +31,9 @@ of sliders and a seed — change the rib count, re-export, done.
   - **Noise & waves** — fbm, ridged fbm, domain warp and sine interference, for frosted, crumpled and antique glass
 - **Height-map controls that map to what the filter does** — Softness (hard edge → sharp displacement, ramp → smooth bend), Contrast (height range, so displacement distance), Bias, Invert
 - **Seam check** — draw the tile 2×2 or 3×3 with boundary guides
+
+  ![2×2 seam check](docs/seam-check.png)
+
 - **PSD export** — flat 8-bit single-channel grayscale, up to 4096², which is exactly what the Glass filter accepts. PNG too, for Blender displacement / AE Displacement Map / TouchDesigner
 - **12 presets** and a seed for reproducible randomness
 - Settings persist in `localStorage`; double-click any slider to reset it
