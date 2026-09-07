@@ -41,12 +41,16 @@ body {
   border-bottom: 1px solid var(--line);
   background: var(--panel);
 }
-.brand { display: flex; align-items: center; gap: 8px; margin-right: auto; }
+.brand { display: flex; align-items: baseline; gap: 8px; margin-right: auto; min-width: 0; }
 .brand-mark { color: var(--accent); font-size: 17px; }
 .brand-name { font-weight: 650; letter-spacing: 0.2px; }
-.topbar-actions { display: flex; gap: 8px; }
+.brand-sub { color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.tabs { display: flex; gap: 2px; padding: 3px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+.tile-controls { display: flex; align-items: center; gap: 8px; }
+.tile-label { color: var(--dim); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+.tile-controls .tab { border: 1px solid transparent; }
+.tile-guides { display: flex; align-items: center; gap: 5px; color: var(--dim); cursor: pointer; }
+.tile-guides input { accent-color: var(--accent); width: 14px; height: 14px; }
 .tab {
   appearance: none; border: 0; background: transparent; color: var(--dim);
   font: inherit; padding: 5px 16px; border-radius: 6px; cursor: pointer;
@@ -96,17 +100,14 @@ body {
   background:
     repeating-conic-gradient(#15181e 0% 25%, #101318 0% 50%) 50% / 22px 22px;
 }
-.stage.dropping { outline: 2px dashed var(--accent); outline-offset: -10px; }
 .stage-canvas {
   display: block;
   max-width: 100%;
   max-height: 100%;
   border-radius: 4px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
-  cursor: grab;
-  touch-action: none;
+  image-rendering: auto;
 }
-.stage-canvas:active { cursor: grabbing; }
 
 /* ---------------------------------------------------------------- footer -- */
 .footer {
@@ -132,7 +133,10 @@ body {
 .ctl-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .ctl-check input { accent-color: var(--accent); width: 15px; height: 15px; }
 
-.note { margin: 4px 0 0; color: var(--dim); font-size: 11px; }
+.note { margin: 8px 0 0; color: var(--dim); font-size: 11px; line-height: 1.45; }
+.steps { margin: 0; padding-left: 17px; color: var(--dim); font-size: 11.5px; line-height: 1.5; }
+.steps li { margin-bottom: 3px; }
+.steps li::marker { color: var(--accent); }
 .row { display: flex; gap: 8px; }
 
 input[type="range"] {

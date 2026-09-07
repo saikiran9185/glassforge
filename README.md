@@ -1,35 +1,36 @@
 # GlassForge
 
-Procedural **glass and refraction texture generator** that runs entirely in the browser.
+A **glass height-map generator** that runs in the browser.
 
-Build a tileable height map from a handful of sliders, watch the refraction happen
-live on your own image, then export the texture as **PNG** or **PSD** — or skip
-Photoshop and export the finished render.
+It makes the black-and-white texture that Photoshop's `Filter → Distort → Glass`
+loads — parametrically, seamlessly tileable, previewable, and exported as the PSD
+that filter insists on.
 
-Nothing is uploaded. Every pixel is generated on your GPU.
+It is not a Photoshop replacement. It replaces the *tedious part* of making the
+texture.
 
 ## Why
 
-Photoshop's `Filter → Distort → Glass` reads a PSD's **luminance as a height map**
-and pushes pixels along its slope. The usual way to feed it is to hand-build a
-texture: duplicate a black-to-transparent gradient thirty times, rasterise,
-rotate, save, load, tweak, save again. That loop is slow and none of it is
-parametric — change your mind about the rib count and you start over.
+The Glass filter reads a PSD's **luminance as a height map** and pushes pixels
+along its slope. The usual way to feed it is to build that texture by hand:
+duplicate a black-to-transparent gradient thirty times, rasterise, unlink the
+mask, rotate, group, save as PSD, load it, decide the ribs are too fine, and do
+the whole thing again.
 
-GlassForge makes the texture a set of sliders, and since the same height map can
-drive a fragment shader, it also shows you the result immediately.
+None of that is parametric, and none of it is reusable. Here the texture is a set
+of sliders and a seed — change the rib count, re-export, done.
 
 ## Features
 
 - **Four pattern families**, all seamlessly tileable
-  - **Ribbed / fluted** — reeded glass. Band count, angle, sawtooth→sine→lens profile, cross-hatch, waviness
-  - **Cracked / shattered** — Voronoi shards with beveled crack lines; each shard is a tilted plane, so it refracts like a real prism rather than a bubble
-  - **Rain / droplets** — lens-profile beads with stretch, trails and mist
-  - **Noise & waves** — fbm, ridged fbm, domain warp and sine interference for frosted, molten and antique glass
-- **Live WebGL2 refraction** on any image you drop, paste or open — with chromatic dispersion, frosted scattering, a specular bevel and tint
-- **Region masking** — apply the glass to the whole frame, a split, a circle or a rectangle, and drag it around on the canvas
-- **Exports** — height map as PNG or **8-bit grayscale PSD** (what Photoshop's Glass filter wants), or the refracted image as PNG, up to 4096²
-- **10 presets** covering the common looks, plus a seed for reproducible randomness
+  - **Ribbed / fluted** — reeded glass. Band count, angle, a sawtooth→sine→lens profile morph, cross-hatch, waviness, taper
+  - **Cracked / shattered** — Voronoi shards with beveled crack lines; each shard is a tilted plane, so it displaces in one consistent direction like a real prism instead of radially like a bubble
+  - **Rain / droplets** — lens-profile beads with stretch, tapering runs and mist
+  - **Noise & waves** — fbm, ridged fbm, domain warp and sine interference, for frosted, crumpled and antique glass
+- **Height-map controls that map to what the filter does** — Softness (hard edge → sharp displacement, ramp → smooth bend), Contrast (height range, so displacement distance), Bias, Invert
+- **Seam check** — draw the tile 2×2 or 3×3 with boundary guides
+- **PSD export** — flat 8-bit single-channel grayscale, up to 4096², which is exactly what the Glass filter accepts. PNG too, for Blender displacement / AE Displacement Map / TouchDesigner
+- **12 presets** and a seed for reproducible randomness
 - Settings persist in `localStorage`; double-click any slider to reset it
 
 ## Run it
@@ -44,41 +45,46 @@ npm run build      # static files in dist/
 npm run preview
 ```
 
-Requires **WebGL2**, which means any current Chrome, Edge, Firefox or Safari.
+Requires **WebGL2** — any current Chrome, Edge, Firefox or Safari.
 
 Pushing to `main` deploys to GitHub Pages via `.github/workflows/deploy.yml`
 (enable Pages → Source: GitHub Actions in the repo settings first).
 
-## Using the PSD in Photoshop
+## Using it in Photoshop
 
-1. Pick a pattern, tune it, hit **↓ Texture PSD**.
-2. In Photoshop, select your layer and **Convert to Smart Object** — this keeps the filter re-editable.
-3. **Filter → Distort → Glass**, set Texture to **Load Texture…**, choose the PSD.
-4. Tune *Distortion*, *Smoothness* and *Scaling*. Double-click the Filter Gallery entry in the Layers panel to swap the texture later.
+1. Tune a pattern, pick an export size, hit **↓ Texture PSD**.
+2. In Photoshop, select your layer → **Convert to Smart Object** (keeps the filter re-editable).
+3. **Filter → Distort → Glass**.
+4. **Texture → Load Texture…** → the exported PSD.
+5. Tune *Distortion*, *Smoothness* and *Scaling*.
 
-The PSD is written flat, 8-bit, single-channel grayscale — the Glass filter only
-reads luminance, and it refuses anything that isn't a PSD.
+Later, double-click **Filter Gallery** in the Layers panel to retune or swap the
+texture without redoing anything.
+
+Exports are square because the tiles are seamless — the Glass filter repeats one
+across any document size, and its own *Scaling* slider handles apparent scale.
 
 ## How it works
 
-Five GPU passes, re-run only when something changes:
+Three GPU passes, re-run only when something changes:
 
 | Pass | What it does |
 |------|--------------|
-| **Height** | Runs the selected pattern's `patternHeight(uv)` into a half-float target, then applies contrast / bias / invert |
-| **Blur** ×2 | Separable Gaussian. Softening the height map is the difference between etched and rolled glass |
-| **Gradient** | Stores the map's slope, mipmapped to 1×1 to get its *mean* steepness |
-| **Glass** | Central-differences the height, divides by that mean slope, and offsets the image UV along it — plus per-channel dispersion, Poisson-disc frosting and a specular bevel from the height normal |
+| **Height** | Runs the selected pattern's `patternHeight(uv)` into a half-float target, then contrast / bias / invert |
+| **Blur** ×2 | Separable Gaussian — the Softness control |
+| **View** | Grayscale blit, optionally tiled with seam guides. Export takes the same blit at repeat 1 into a byte target and reads it back |
 
-That mean-slope division is the part worth stealing: without it, "Distortion"
-silently tracks pattern frequency, so a 120-band texture obliterates the image at
-the same setting where a 6-band one barely bends it. Normalising makes the slider
-a displacement amount — the way Photoshop's is.
+Half-float intermediates matter: an 8-bit height map bands visibly, and the Glass
+filter turns each band step into a displacement edge.
+
+The PSD writer (`src/export/psd.ts`, ~40 lines, no dependencies) emits header →
+empty colour-mode/resources/layer sections → raw image data. Single channel,
+8-bit, colour mode 1.
 
 ## Adding a pattern
 
-One file, then one line. Patterns are just a GLSL function plus a param schema —
-the UI, uniforms, presets and export all read from that.
+One file, then one line. A pattern is a GLSL function plus a param schema — the
+UI, uniforms, presets and export all read from that.
 
 ```ts
 // src/patterns/hex.ts
@@ -103,7 +109,8 @@ Then add it to `PATTERNS` in `src/patterns/registry.ts`. That's the whole change
 **Keep it tileable:** pass the same integer frequency you multiply `uv` by as the
 `period` argument of `hash21p` / `hash22p` / `vnoise` / `fbm` / `voronoi`, and take
 stripe directions from `stripeDir()`, which rounds them to integer vectors so
-angled stripes still wrap. Helpers live in `src/patterns/common.glsl.ts`.
+angled stripes still wrap. Helpers live in `src/patterns/common.glsl.ts`. Check
+your work with the 2×2 preview.
 
 ## Layout
 
@@ -111,7 +118,7 @@ angled stripes still wrap. Helpers live in `src/patterns/common.glsl.ts`.
 src/
   patterns/     pattern definitions + the shared GLSL prelude
   gl/           context, programs, render targets, shader sources, renderer
-  ui/           tiny DOM helpers, generated controls, placeholder image
+  ui/           tiny DOM helpers and generated controls
   export/       PNG encoder (canvas) and PSD writer (hand-rolled)
   state.ts      app state, defaults, persistence
   presets.ts    named starting points

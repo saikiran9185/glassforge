@@ -4,13 +4,12 @@ import {
   createByteTarget,
   createContext,
   createHeightTarget,
-  createImageTexture,
   createProgram,
   createQuad,
 } from "./core";
-import { BLUR_FS, GLASS_FS, GRAD_FS, VERT, VIEW_FS, buildHeightFS } from "./shaders";
+import { BLUR_FS, VERT, VIEW_FS, buildHeightFS } from "./shaders";
 import { patternById } from "../patterns/registry";
-import { State, hexToRgb } from "../state";
+import { State } from "../state";
 
 interface Prog {
   prog: WebGLProgram;
@@ -30,15 +29,9 @@ export class Renderer {
   private heightProgs = new Map<string, Prog>();
   private blur: Prog;
   private view: Prog;
-  private grad: Prog;
-  private glass: Prog;
   private hA: Target;
   private hB: Target;
-  private gradT: Target;
   private out: Target;
-  private imgTex: WebGLTexture | null = null;
-  private imgW = 1;
-  private imgH = 1;
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = createContext(canvas);
@@ -46,16 +39,9 @@ export class Renderer {
     this.quad = createQuad(gl);
     this.blur = this.makeProg(BLUR_FS);
     this.view = this.makeProg(VIEW_FS);
-    this.grad = this.makeProg(GRAD_FS);
-    this.glass = this.makeProg(GLASS_FS);
     this.hA = createHeightTarget(gl);
     this.hB = createHeightTarget(gl);
-    this.gradT = createByteTarget(gl, true);
     this.out = createByteTarget(gl);
-  }
-
-  get imageSize(): { width: number; height: number } {
-    return { width: this.imgW, height: this.imgH };
   }
 
   get maxTextureSize(): number {
@@ -76,20 +62,12 @@ export class Renderer {
     return p;
   }
 
-  setImage(source: TexImageSource, width: number, height: number): void {
-    const gl = this.gl;
-    if (this.imgTex) gl.deleteTexture(this.imgTex);
-    this.imgTex = createImageTexture(gl, source);
-    this.imgW = width;
-    this.imgH = height;
-  }
-
   private drawQuad(): void {
     this.gl.bindVertexArray(this.quad);
     this.gl.drawArrays(this.gl.TRIANGLES, 0, 3);
   }
 
-  /** Renders the pattern (plus levels and blur) into hA and returns it. */
+  /** Renders the pattern, its levels and the softening blur into hA. */
   private renderHeight(state: State, size: number): Target {
     const gl = this.gl;
     const s = Math.min(size, this.maxTextureSize);
@@ -101,7 +79,6 @@ export class Renderer {
     this.hA.bind();
     gl.useProgram(prog);
     u.f("u_seed", state.seed);
-    u.f("u_period", 1);
     u.f("u_contrast", state.height.contrast);
     u.f("u_brightness", state.height.brightness);
     u.f("u_invert", state.height.invert);
@@ -128,110 +105,37 @@ export class Renderer {
       this.blur.u.v2("u_dir", 0, 1 / s);
       this.drawQuad();
     }
-
-    // Slope statistics for the glass pass, averaged down to 1x1 by the mip chain.
-    this.gradT.resize(s, s);
-    this.gradT.bind();
-    gl.useProgram(this.grad.prog);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.hA.texture);
-    this.grad.u.i("u_src", 0);
-    this.grad.u.v2("u_texel", 1 / s, 1 / s);
-    this.drawQuad();
-    this.gradT.generateMips();
-
     return this.hA;
   }
 
-  /** Binds the glass program and uploads everything except the render target. */
-  private setupGlass(state: State, height: Target, width: number, hgt: number): void {
+  private blitView(source: Target, repeat: number, guides: boolean): void {
     const gl = this.gl;
-    const { u, prog } = this.glass;
-    gl.useProgram(prog);
+    gl.useProgram(this.view.prog);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.imgTex);
-    u.i("u_img", 0);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, height.texture);
-    u.i("u_height", 1);
-    gl.activeTexture(gl.TEXTURE2);
-    gl.bindTexture(gl.TEXTURE_2D, this.gradT.texture);
-    u.i("u_grad", 2);
-
-    const g = state.glass;
-    // Scaling by the image aspect keeps the pattern's own cells square rather
-    // than stretching them to the canvas.
-    const aspect = width / Math.max(1, hgt);
-    u.v2("u_imgSize", width, hgt);
-    u.v2("u_tile", g.scale * aspect, g.scale);
-    u.v2("u_offset", g.offsetX, g.offsetY);
-    u.f("u_rotate", g.rotate);
-    u.f("u_distort", g.distort);
-    u.f("u_chroma", g.chroma);
-    u.f("u_frost", g.frost);
-    u.f("u_spec", g.spec);
-    u.f("u_relief", g.relief);
-    u.f("u_lightAngle", g.lightAngle);
-    u.f("u_tint", g.tint);
-    const [r, gg, b] = hexToRgb(g.tintColor);
-    u.v3("u_tintColor", r, gg, b);
-
-    const rv = state.reveal;
-    u.i("u_reveal", rv.mode);
-    u.v2("u_revealPos", rv.x, rv.y);
-    u.f("u_revealSize", rv.size);
-    u.f("u_revealFeather", rv.feather);
-    u.f("u_revealAngle", rv.angle);
-    gl.activeTexture(gl.TEXTURE0);
-  }
-
-  /** Draws to the visible canvas. `view` picks the refracted image or the raw tile. */
-  render(state: State, view: "result" | "texture"): void {
-    const gl = this.gl;
-    const height = this.renderHeight(state, state.textureSize);
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-
-    if (view === "texture" || !this.imgTex) {
-      gl.useProgram(this.view.prog);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, height.texture);
-      this.view.u.i("u_src", 0);
-      this.drawQuad();
-      return;
-    }
-
-    this.setupGlass(state, height, this.canvas.width, this.canvas.height);
+    gl.bindTexture(gl.TEXTURE_2D, source.texture);
+    this.view.u.i("u_src", 0);
+    this.view.u.f("u_repeat", repeat);
+    this.view.u.f("u_guides", guides ? 1 : 0);
     this.drawQuad();
   }
 
-  /** Height map at export resolution, as 8-bit RGBA (grayscale). */
-  readTexture(state: State, size: number): Pixels {
+  /** Draws the map to the visible canvas, optionally tiled to check seams. */
+  render(state: State): void {
     const gl = this.gl;
+    const height = this.renderHeight(state, state.textureSize);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    this.blitView(height, state.repeat, state.guides);
+  }
+
+  /** One tile at export resolution, as 8-bit RGBA (grayscale). */
+  readTexture(state: State, size: number): Pixels {
     const s = Math.min(size, this.maxTextureSize);
     const height = this.renderHeight(state, s);
     this.out.resize(s, s);
     this.out.bind();
-    gl.useProgram(this.view.prog);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, height.texture);
-    this.view.u.i("u_src", 0);
-    this.drawQuad();
-    return this.readTarget(this.out);
-  }
-
-  /** The refracted image at its native resolution. */
-  readResult(state: State): Pixels {
-    if (!this.imgTex) throw new Error("No image loaded.");
-    const max = this.maxTextureSize;
-    const w = Math.min(this.imgW, max);
-    const h = Math.min(this.imgH, max);
-    const height = this.renderHeight(state, state.textureSize);
-    this.out.resize(w, h);
-    this.out.bind();
-    this.setupGlass(state, height, w, h);
-    this.drawQuad();
+    // Always a single, un-annotated tile — never the tiled preview.
+    this.blitView(height, 1, false);
     return this.readTarget(this.out);
   }
 
