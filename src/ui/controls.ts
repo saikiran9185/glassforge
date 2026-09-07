@@ -106,3 +106,33 @@ export function checkbox(label: string, value: boolean, onChange: (v: boolean) =
     }),
   ]);
 }
+
+export function textInput(
+  label: string,
+  value: string,
+  onInput: (v: string) => void,
+  placeholder = ""
+): HTMLElement {
+  return el("label", { class: "ctl" }, [
+    el("span", { class: "ctl-head" }, [el("span", { class: "ctl-label", text: label })]),
+    el("input", {
+      class: "text-input",
+      type: "text",
+      value,
+      placeholder,
+      oninput: (e: Event) => onInput((e.target as HTMLInputElement).value),
+    }),
+  ]);
+}
+
+export function textArea(label: string, value: string, onInput: (v: string) => void): HTMLElement {
+  return el("label", { class: "ctl" }, [
+    el("span", { class: "ctl-head" }, [el("span", { class: "ctl-label", text: label })]),
+    el("textarea", {
+      class: "text-input",
+      rows: 2,
+      value,
+      oninput: (e: Event) => onInput((e.target as HTMLTextAreaElement).value),
+    }),
+  ]);
+}
