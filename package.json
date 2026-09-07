@@ -1,0 +1,18 @@
+{
+  "name": "glassforge",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Procedural glass / refraction texture generator with a live WebGL2 preview. Export height maps as PNG or PSD, or the refracted image itself.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}
