@@ -1,6 +1,9 @@
 # GlassForge
 
-A **glass height-map generator** that runs in the browser.
+### → [saikiran9185.github.io/glassforge](https://saikiran9185.github.io/glassforge/)
+
+A **glass height-map generator** that runs in the browser. No install, no sign-in,
+no upload — open the link and export a PSD.
 
 It makes the black-and-white texture that Photoshop's `Filter → Distort → Glass`
 loads — parametrically, seamlessly tileable, previewable, and exported as the PSD
